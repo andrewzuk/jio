@@ -1,7 +1,7 @@
 package jio
 
 import (
-	"fmt"
+    "errors"
 	"regexp"
 	"strings"
 )
@@ -41,12 +41,19 @@ func (s *StringSchema) Transform(f func(*Context)) *StringSchema {
 	return s
 }
 
+// Custom adds a custom validation
+func (s *StringSchema) Custom(name string, args ...interface{}) *StringSchema {
+    return s.Transform(func(ctx *Context) {
+        s.baseSchema.custom(ctx, name, args...)
+    })
+}
+
 // Required same as AnySchema.Required
 func (s *StringSchema) Required() *StringSchema {
 	s.required = boolPtr(true)
 	return s.PrependTransform(func(ctx *Context) {
 		if ctx.Value == nil {
-			ctx.Abort(fmt.Errorf("field `%s` is required", ctx.FieldPath()))
+			ctx.Abort(ErrorRequired(ctx))
 		}
 	})
 }
@@ -82,7 +89,7 @@ func (s *StringSchema) Set(value string) *StringSchema {
 func (s *StringSchema) Equal(value string) *StringSchema {
 	return s.Check(func(ctxValue string) error {
 		if value != ctxValue {
-			return fmt.Errorf("is not %v", value)
+			return errors.New(ErrorMessageEqual(interface{}(value)))
 		}
 		return nil
 	})
@@ -90,20 +97,20 @@ func (s *StringSchema) Equal(value string) *StringSchema {
 
 // When same as AnySchema.When
 func (s *StringSchema) When(refPath string, condition interface{}, then Schema) *StringSchema {
-	return s.Transform(func(ctx *Context) { s.when(ctx, refPath, condition, then) })
+	return s.Transform(func(ctx *Context) { s.whenEqual(ctx, refPath, condition, then) })
 }
 
 // Check use the provided function to validate the value of the key.
-// Throws an error when the value is not string.
+// Throws an error whenEqual the value is not string.
 func (s *StringSchema) Check(f func(string) error) *StringSchema {
 	return s.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(string)
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not string", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeString(ctx))
 			return
 		}
 		if err := f(ctxValue); err != nil {
-			ctx.Abort(fmt.Errorf("field `%s` value %v %s", ctx.FieldPath(), ctx.Value, err.Error()))
+			ctx.ErrorBag.Add(NewError(ctx, err.Error()))
 		}
 	})
 }
@@ -119,7 +126,7 @@ func (s *StringSchema) Valid(values ...string) *StringSchema {
 			}
 		}
 		if !isValid {
-			return fmt.Errorf("not in %v", values)
+			return errors.New(ErrorMessageStringOneOf(values))
 		}
 		return nil
 	})
@@ -129,7 +136,7 @@ func (s *StringSchema) Valid(values ...string) *StringSchema {
 func (s *StringSchema) Min(min int) *StringSchema {
 	return s.Check(func(ctxValue string) error {
 		if len(ctxValue) < min {
-			return fmt.Errorf("length less than %d", min)
+			return errors.New(ErrorMessageStringLengthMin(min))
 		}
 		return nil
 	})
@@ -139,7 +146,7 @@ func (s *StringSchema) Min(min int) *StringSchema {
 func (s *StringSchema) Max(max int) *StringSchema {
 	return s.Check(func(ctxValue string) error {
 		if len(ctxValue) > max {
-			return fmt.Errorf("length exceeded %d", max)
+			return errors.New(ErrorMessageStringLengthMin(max))
 		}
 		return nil
 	})
@@ -149,7 +156,7 @@ func (s *StringSchema) Max(max int) *StringSchema {
 func (s *StringSchema) Length(length int) *StringSchema {
 	return s.Check(func(ctxValue string) error {
 		if len(ctxValue) != length {
-			return fmt.Errorf("length not equal to %d", length)
+			return errors.New(ErrorMessageStringLengthEqual(length))
 		}
 		return nil
 	})
@@ -160,7 +167,7 @@ func (s *StringSchema) Regex(regex string) *StringSchema {
 	re := regexp.MustCompile(regex)
 	return s.Check(func(ctxValue string) error {
 		if !re.MatchString(ctxValue) {
-			return fmt.Errorf("not match with %s", regex)
+			return errors.New(ErrorMessageMatchPattern(regex))
 		}
 		return nil
 	})
@@ -177,12 +184,12 @@ func (s *StringSchema) Token() *StringSchema {
 }
 
 // Convert use the provided function to convert the value of the key.
-// Throws an error when the value is not string.
+// Throws an error whenEqual the value is not string.
 func (s *StringSchema) Convert(f func(string) string) *StringSchema {
 	return s.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(string)
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not string", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeString(ctx))
 			return
 		}
 		ctx.Value = f(ctxValue)
@@ -216,9 +223,9 @@ func (s *StringSchema) Validate(ctx *Context) {
 			return
 		}
 	}
-	if ctx.Err == nil {
+	if ctx.ErrorBag == nil {
 		if _, ok := (ctx.Value).(string); !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not string", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeString(ctx))
 		}
 	}
 }

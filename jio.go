@@ -18,6 +18,15 @@ const (
 	ContextKeyBody
 )
 
+type customValidatorFn func(*Context, ...interface{})
+
+var customValidators = map[string]customValidatorFn{}
+
+// Register registers a new validation rule which can be referenced via `name`
+func Register(name string, fn customValidatorFn) {
+    customValidators[name] = fn
+}
+
 // ValidateJSON validate the provided json bytes using the schema.
 func ValidateJSON(dataRaw *[]byte, schema Schema) (dataMap map[string]interface{}, err error) {
 	if err = json.Unmarshal(*dataRaw, &dataMap); err != nil {
@@ -25,8 +34,8 @@ func ValidateJSON(dataRaw *[]byte, schema Schema) (dataMap map[string]interface{
 	}
 	ctx := NewContext(dataMap)
 	schema.Validate(ctx)
-	if ctx.Err != nil {
-		return dataMap, ctx.Err
+	if !ctx.ErrorBag.Empty() {
+		return dataMap, ctx.ErrorBag
 	}
 	dataMap = ctx.Value.(map[string]interface{})
 	dataNew, err := json.Marshal(ctx.Value)
@@ -84,8 +93,8 @@ func ValidateQuery(schema Schema, errorHandler func(http.ResponseWriter, *http.R
 			}
 			ctx := NewContext(query)
 			schema.Validate(ctx)
-			if ctx.Err != nil {
-				errorHandler(w, r, ctx.Err)
+			if !ctx.ErrorBag.Empty() {
+				errorHandler(w, r, ctx.ErrorBag)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ContextKeyQuery, ctx.Value)))

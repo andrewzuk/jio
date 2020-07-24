@@ -1,9 +1,7 @@
 package jio
 
 import (
-	"fmt"
 	"sort"
-	"strings"
 )
 
 type objectItem struct {
@@ -60,12 +58,19 @@ func (o *ObjectSchema) Transform(f func(*Context)) *ObjectSchema {
 	return o
 }
 
+// Custom adds a custom validation
+func (o *ObjectSchema) Custom(name string, args ...interface{}) *ObjectSchema {
+    return o.Transform(func(ctx *Context) {
+        o.baseSchema.custom(ctx, name, args...)
+    })
+}
+
 // Required same as AnySchema.Required
 func (o *ObjectSchema) Required() *ObjectSchema {
 	o.required = boolPtr(true)
 	return o.PrependTransform(func(ctx *Context) {
 		if ctx.Value == nil {
-			ctx.Abort(fmt.Errorf("field `%s` is required", ctx.FieldPath()))
+			ctx.Abort(ErrorRequired(ctx))
 		}
 	})
 }
@@ -95,16 +100,20 @@ func (o *ObjectSchema) With(keys ...string) *ObjectSchema {
 	return o.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(map[string]interface{})
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not object", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeObject(ctx))
 			return
 		}
+
+		var missingKeys []string
 		for _, key := range keys {
 			_, ok := ctxValue[key]
 			if !ok {
-				ctx.Abort(fmt.Errorf("field `%s` not contains %v", ctx.FieldPath(), key))
-				return
+			    missingKeys = append(missingKeys, key)
 			}
 		}
+		if len(missingKeys) > 0 {
+		    ctx.ErrorBag.Add(ErrorObjectMissingRequiredKeys(ctx, missingKeys))
+        }
 	})
 }
 
@@ -113,18 +122,17 @@ func (o *ObjectSchema) Without(keys ...string) *ObjectSchema {
 	return o.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(map[string]interface{})
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not object", ctx.FieldPath(), ctx.Value))
-			return
+			ctx.ErrorBag.Add(ErrorTypeObject(ctx))
 		}
-		contains := make([]string, 0, 3)
+		forbiddenKeys := make([]string, 0, 3)
 		for _, key := range keys {
 			_, ok := ctxValue[key]
 			if ok {
-				contains = append(contains, key)
+				forbiddenKeys = append(forbiddenKeys, key)
 			}
 		}
-		if len(contains) > 1 {
-			ctx.Abort(fmt.Errorf("field `%s` contains %v", ctx.FieldPath(), strings.Join(contains, ",")))
+		if len(forbiddenKeys) > 1 {
+			ctx.ErrorBag.Add(ErrorObjectContainsForbiddenKeys(ctx, forbiddenKeys))
 			return
 		}
 	})
@@ -132,7 +140,7 @@ func (o *ObjectSchema) Without(keys ...string) *ObjectSchema {
 
 // When same as AnySchema.When
 func (o *ObjectSchema) When(refPath string, condition interface{}, then Schema) *ObjectSchema {
-	return o.Transform(func(ctx *Context) { o.when(ctx, refPath, condition, then) })
+	return o.Transform(func(ctx *Context) { o.whenEqual(ctx, refPath, condition, then) })
 }
 
 // Keys set the object keys's schema
@@ -140,7 +148,7 @@ func (o *ObjectSchema) Keys(children K) *ObjectSchema {
 	return o.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(map[string]interface{})
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not object", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeObject(ctx))
 			return
 		}
 		fields := make([]string, len(ctx.fields))
@@ -157,10 +165,7 @@ func (o *ObjectSchema) Keys(children K) *ObjectSchema {
 			ctx.fields = append(fields, obj.key)
 			ctx.Value = value
 			obj.schema.Validate(ctx)
-			if ctx.Err != nil {
-				return
-			}
-			if !ctx.skip {
+			if ctx.ErrorBag.Empty() && !ctx.skip {
 				ctxValue[obj.key] = ctx.Value
 			}
 		}
@@ -178,9 +183,9 @@ func (o *ObjectSchema) Validate(ctx *Context) {
 			return
 		}
 	}
-	if ctx.Err == nil {
+	if ctx.ErrorBag == nil {
 		if _, ok := (ctx.Value).(map[string]interface{}); !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not object", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeObject(ctx))
 		}
 	}
 }

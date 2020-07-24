@@ -1,9 +1,5 @@
 package jio
 
-import (
-	"fmt"
-)
-
 // Bool Generates a schema object that matches bool data type
 func Bool() *BoolSchema {
 	return &BoolSchema{
@@ -39,12 +35,19 @@ func (b *BoolSchema) Transform(f func(*Context)) *BoolSchema {
 	return b
 }
 
+// Custom adds a custom validation
+func (b *BoolSchema) Custom(name string, args ...interface{}) *BoolSchema {
+    return b.Transform(func(ctx *Context) {
+        b.baseSchema.custom(ctx, name, args...)
+    })
+}
+
 // Required same as AnySchema.Required
 func (b *BoolSchema) Required() *BoolSchema {
 	b.required = boolPtr(true)
 	return b.PrependTransform(func(ctx *Context) {
 		if ctx.Value == nil {
-			ctx.Abort(fmt.Errorf("field `%s` is required", ctx.FieldPath()))
+			ctx.Abort(ErrorRequired(ctx))
 		}
 	})
 }
@@ -80,14 +83,14 @@ func (b *BoolSchema) Set(value bool) *BoolSchema {
 func (b *BoolSchema) Equal(value bool) *BoolSchema {
 	return b.Transform(func(ctx *Context) {
 		if value != ctx.Value {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not %v", ctx.FieldPath(), ctx.Value, value))
+			ctx.ErrorBag.Add(ErrorEqual(ctx, value))
 		}
 	})
 }
 
 // When same as AnySchema.When
 func (b *BoolSchema) When(refPath string, condition interface{}, then Schema) *BoolSchema {
-	return b.Transform(func(ctx *Context) { b.when(ctx, refPath, condition, then) })
+	return b.Transform(func(ctx *Context) { b.whenEqual(ctx, refPath, condition, then) })
 }
 
 // Truthy allow for additional values to be considered valid booleans by converting them to true during validation.
@@ -123,9 +126,9 @@ func (b *BoolSchema) Validate(ctx *Context) {
 			return
 		}
 	}
-	if ctx.Err == nil {
+	if ctx.ErrorBag.Empty() {
 		if _, ok := (ctx.Value).(bool); !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not boolean", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeBool(ctx))
 		}
 	}
 }

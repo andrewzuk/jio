@@ -1,9 +1,9 @@
 package jio
 
 import (
-	"errors"
-	"fmt"
-	"reflect"
+    "errors"
+    "fmt"
+    "reflect"
 )
 
 var _ Schema = new(ArraySchema)
@@ -41,12 +41,19 @@ func (a *ArraySchema) Transform(f func(*Context)) *ArraySchema {
 	return a
 }
 
+// Custom adds a custom validation
+func (a *ArraySchema) Custom(name string, args ...interface{}) *ArraySchema {
+    return a.Transform(func(ctx *Context) {
+        a.baseSchema.custom(ctx, name, args...)
+    })
+}
+
 // Required same as AnySchema.Required
 func (a *ArraySchema) Required() *ArraySchema {
 	a.required = boolPtr(true)
 	return a.PrependTransform(func(ctx *Context) {
 		if ctx.Value == nil {
-			ctx.Abort(fmt.Errorf("field `%s` is required", ctx.FieldPath()))
+			ctx.Abort(ErrorRequired(ctx))
 		}
 	})
 }
@@ -73,51 +80,53 @@ func (a *ArraySchema) Default(value interface{}) *ArraySchema {
 
 // When same as AnySchema.When
 func (a *ArraySchema) When(refPath string, condition interface{}, then Schema) *ArraySchema {
-	return a.Transform(func(ctx *Context) { a.when(ctx, refPath, condition, then) })
+	return a.Transform(func(ctx *Context) { a.whenEqual(ctx, refPath, condition, then) })
 }
 
 // Check use the provided function to validate the value of the key.
-// Throws an error when the value is not a slice.
-func (a *ArraySchema) Check(f func(interface{}) error) *ArraySchema {
+// Throws an error whenEqual the value is not a slice.
+func (a *ArraySchema) Check(f func(*Context) error) *ArraySchema {
 	return a.Transform(func(ctx *Context) {
 		if !ctx.AssertKind(reflect.Slice) {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not array", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeArray(ctx))
 			return
 		}
-		if err := f(ctx.Value); err != nil {
-			ctx.Abort(fmt.Errorf("field `%s` value %v %s", ctx.FieldPath(), ctx.Value, err.Error()))
-		}
+		err := f(ctx)
+		if err != nil {
+            if bag, ok := err.(*ErrorBag); ok {
+                ctx.ErrorBag.AddBag(bag)
+            } else if ferr, ok := err.(FieldError); ok {
+                ctx.ErrorBag.Add(ferr)
+            } else {
+                ctx.ErrorBag.Add(FieldError{ctx.FieldPath(), err})
+            }
+        }
 	})
 }
 
 // Items check if this value can pass the validation of any schema.
 func (a *ArraySchema) Items(schemas ...Schema) *ArraySchema {
-	return a.Check(func(ctxValue interface{}) error {
-		ctxRV := reflect.ValueOf(ctxValue)
+	return a.Check(func(ctx *Context) error {
+		ctxRV := reflect.ValueOf(ctx.Value)
+		errs := NewErrorBag()
 		for i := 0; i < ctxRV.Len(); i++ {
 			rv := ctxRV.Index(i).Interface()
-			var isValid bool
 			for _, schema := range schemas {
 				ctxNew := NewContext(rv)
+				ctxNew.fields = append(ctxNew.fields, append(ctx.fields, fmt.Sprintf(`%d`, i))...)
 				schema.Validate(ctxNew)
-				if ctxNew.Err == nil {
-					isValid = true
-					break
-				}
-			}
-			if !isValid {
-				return errors.New("not valid type")
+				errs.AddBag(ctxNew.ErrorBag)
 			}
 		}
-		return nil
+		return errs
 	})
 }
 
 // Min check if the length of this slice is greater than or equal to the provided length.
 func (a *ArraySchema) Min(min int) *ArraySchema {
-	return a.Check(func(ctxValue interface{}) error {
-		if reflect.ValueOf(ctxValue).Len() < min {
-			return fmt.Errorf("length less than %d", min)
+	return a.Check(func(ctx *Context) error {
+		if reflect.ValueOf(ctx.Value).Len() < min {
+			return errors.New(ErrorMessageArrayLengthMin(min))
 		}
 		return nil
 	})
@@ -125,9 +134,9 @@ func (a *ArraySchema) Min(min int) *ArraySchema {
 
 // Max check if the length of this slice is less than or equal to the provided length.
 func (a *ArraySchema) Max(max int) *ArraySchema {
-	return a.Check(func(ctxValue interface{}) error {
-		if reflect.ValueOf(ctxValue).Len() > max {
-			return fmt.Errorf("length exceeded %d", max)
+	return a.Check(func(ctx *Context) error {
+		if reflect.ValueOf(ctx.Value).Len() > max {
+			return errors.New(ErrorMessageArrayLengthMax(max))
 		}
 		return nil
 	})
@@ -135,9 +144,9 @@ func (a *ArraySchema) Max(max int) *ArraySchema {
 
 // Length check if the length of this slice is equal to the provided length.
 func (a *ArraySchema) Length(length int) *ArraySchema {
-	return a.Check(func(ctxValue interface{}) error {
-		if reflect.ValueOf(ctxValue).Len() != length {
-			return fmt.Errorf("length not equal to %d", length)
+	return a.Check(func(ctx *Context) error {
+		if reflect.ValueOf(ctx.Value).Len() != length {
+			return errors.New(ErrorMessageArrayLengthEqual(length))
 		}
 		return nil
 	})
@@ -154,9 +163,9 @@ func (a *ArraySchema) Validate(ctx *Context) {
 			return
 		}
 	}
-	if ctx.Err == nil {
+	if ctx.ErrorBag.Empty() {
 		if !ctx.AssertKind(reflect.Slice) {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not array", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeArray(ctx))
 		}
 	}
 }

@@ -1,10 +1,9 @@
 package jio
 
 import (
-	"errors"
-	"fmt"
-	"math"
-	"strconv"
+    "errors"
+    "math"
+    "strconv"
 )
 
 // Number Generates a schema object that matches number data type
@@ -42,12 +41,19 @@ func (n *NumberSchema) Transform(f func(*Context)) *NumberSchema {
 	return n
 }
 
+// Custom adds a custom validation
+func (n *NumberSchema) Custom(name string, args ...interface{}) *NumberSchema {
+    return n.Transform(func(ctx *Context) {
+        n.baseSchema.custom(ctx, name, args...)
+    })
+}
+
 // Required same as AnySchema.Required
 func (n *NumberSchema) Required() *NumberSchema {
 	n.required = boolPtr(true)
 	return n.PrependTransform(func(ctx *Context) {
 		if ctx.Value == nil {
-			ctx.Abort(fmt.Errorf("field `%s` is required", ctx.FieldPath()))
+			ctx.Abort(ErrorRequired(ctx))
 		}
 	})
 }
@@ -83,7 +89,7 @@ func (n *NumberSchema) Set(value float64) *NumberSchema {
 func (n *NumberSchema) Equal(value float64) *NumberSchema {
 	return n.Check(func(ctxValue float64) error {
 		if value != ctxValue {
-			return fmt.Errorf("is not %v", value)
+			return errors.New(ErrorMessageEqual(value))
 		}
 		return nil
 	})
@@ -91,20 +97,20 @@ func (n *NumberSchema) Equal(value float64) *NumberSchema {
 
 // When same as AnySchema.When
 func (n *NumberSchema) When(refPath string, condition interface{}, then Schema) *NumberSchema {
-	return n.Transform(func(ctx *Context) { n.when(ctx, refPath, condition, then) })
+	return n.Transform(func(ctx *Context) { n.whenEqual(ctx, refPath, condition, then) })
 }
 
 // Check use the provided function to validate the value of the key.
-// Throws an error when the value is not float64.
+// Throws an error whenEqual the value is not float64.
 func (n *NumberSchema) Check(f func(float64) error) *NumberSchema {
 	return n.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(float64)
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not number", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeNumber(ctx))
 			return
 		}
 		if err := f(ctxValue); err != nil {
-			ctx.Abort(fmt.Errorf("field `%s` value %v %s", ctx.FieldPath(), ctx.Value, err.Error()))
+			ctx.ErrorBag.Add(NewError(ctx, err.Error()))
 		}
 	})
 }
@@ -120,7 +126,7 @@ func (n *NumberSchema) Valid(values ...float64) *NumberSchema {
 			}
 		}
 		if !isValid {
-			return fmt.Errorf("not in %v", values)
+			return errors.New(ErrorMessageNumberOneOf(values))
 		}
 		return nil
 	})
@@ -130,7 +136,7 @@ func (n *NumberSchema) Valid(values ...float64) *NumberSchema {
 func (n *NumberSchema) Min(min float64) *NumberSchema {
 	return n.Check(func(ctxValue float64) error {
 		if ctxValue < min {
-			return fmt.Errorf("less than %v", min)
+			return errors.New(ErrorMessageMin(min))
 		}
 		return nil
 	})
@@ -140,29 +146,51 @@ func (n *NumberSchema) Min(min float64) *NumberSchema {
 func (n *NumberSchema) Max(max float64) *NumberSchema {
 	return n.Check(func(ctxValue float64) error {
 		if ctxValue > max {
-			return fmt.Errorf("exceeded %v", max)
+			return errors.New(ErrorMessageMax(max))
 		}
 		return nil
 	})
+}
+
+// GreaterThanOrEqualToField checks if the value is greater than or equal to the value at `refPath`
+func (n *NumberSchema) GreaterThanOrEqualToField(refPath string) *NumberSchema {
+    return n.Transform(func (ctx *Context) {
+        ctxValue, ok := ctx.Value.(float64)
+        if !ok {
+            ctx.Abort(ErrorTypeNumber(ctx))
+            return
+        }
+
+        r, _ := ctx.Ref(refPath)
+        refValue, ok := r.(float64)
+        if !ok {
+            ctx.ErrorBag.AddFromContext(ctx, ErrorMessageTypeNumber())
+            return
+        }
+
+        if ctxValue < refValue {
+            ctx.ErrorBag.Add(ErrorMin(ctx, refPath))
+        }
+    })
 }
 
 // Integer check if the value is integer.
 func (n *NumberSchema) Integer() *NumberSchema {
 	return n.Check(func(ctxValue float64) error {
 		if ctxValue != math.Trunc(ctxValue) {
-			return errors.New("not integer")
+			return errors.New(ErrorMessageTypeInt())
 		}
 		return nil
 	})
 }
 
 // Convert use the provided function to convert the value of the key.
-// Throws an error when the value is not float64.
+// Throws an error whenEqual the value is not float64.
 func (n *NumberSchema) Convert(f func(float64) float64) *NumberSchema {
 	return n.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(float64)
 		if !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not number", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeNumber(ctx))
 			return
 		}
 		ctx.Value = f(ctxValue)
@@ -185,14 +213,14 @@ func (n *NumberSchema) Round() *NumberSchema {
 }
 
 // ParseString convert the string value to float64.
-// Validation will be skipped when this value is not string.
+// Validation will be skipped whenEqual this value is not string.
 // But if this value is not a valid number, an error will be thrown.
 func (n *NumberSchema) ParseString() *NumberSchema {
 	return n.Transform(func(ctx *Context) {
 		if ctxValue, ok := ctx.Value.(string); ok {
 			value, err := strconv.ParseFloat(ctxValue, 64)
 			if err != nil {
-				ctx.Abort(fmt.Errorf("field `%s` value %v corvert to float64 failed", ctx.FieldPath(), ctx.Value))
+				ctx.Abort(ErrorTypeNumber(ctx))
 				return
 			}
 			ctx.Value = value
@@ -214,9 +242,9 @@ func (n *NumberSchema) Validate(ctx *Context) {
 			return
 		}
 	}
-	if ctx.Err == nil {
+	if ctx.ErrorBag.Empty() {
 		if _, ok := (ctx.Value).(float64); !ok {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not number", ctx.FieldPath(), ctx.Value))
+			ctx.Abort(ErrorTypeNumber(ctx))
 		}
 	}
 }

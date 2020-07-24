@@ -1,9 +1,5 @@
 package jio
 
-import (
-	"fmt"
-)
-
 var _ Schema = new(AnySchema)
 
 // Any Generates a schema object that matches any data type
@@ -19,6 +15,13 @@ type AnySchema struct {
 
 	required *bool
 	rules    []func(*Context)
+}
+
+// Custom adds a custom validation
+func (a *AnySchema) Custom(name string, args ...interface{}) *AnySchema {
+    return a.Transform(func(ctx *Context) {
+        a.baseSchema.custom(ctx, name, args...)
+    })
 }
 
 // SetPriority set priority to the schema.
@@ -46,7 +49,7 @@ func (a *AnySchema) Required() *AnySchema {
 	a.required = boolPtr(true)
 	return a.PrependTransform(func(ctx *Context) {
 		if ctx.Value == nil {
-			ctx.Abort(fmt.Errorf("field `%s` is required", ctx.FieldPath()))
+			ctx.Abort(ErrorRequired(ctx))
 		}
 	})
 }
@@ -84,7 +87,7 @@ func (a *AnySchema) Set(value interface{}) *AnySchema {
 func (a *AnySchema) Equal(value interface{}) *AnySchema {
 	return a.Transform(func(ctx *Context) {
 		if value != ctx.Value {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not %v", ctx.FieldPath(), ctx.Value, value))
+			ctx.ErrorBag.Add(ErrorEqual(ctx, value))
 			return
 		}
 	})
@@ -98,7 +101,7 @@ func (a *AnySchema) Equal(value interface{}) *AnySchema {
 // When the condition is true, the then schema will be applied to the current key value.
 // Otherwise, nothing will be done.
 func (a *AnySchema) When(refPath string, condition interface{}, then Schema) *AnySchema {
-	return a.Transform(func(ctx *Context) { a.when(ctx, refPath, condition, then) })
+	return a.Transform(func(ctx *Context) { a.whenEqual(ctx, refPath, condition, then) })
 }
 
 // Valid add the provided values into the allowed whitelist and mark them as the only valid values allowed.
@@ -112,7 +115,7 @@ func (a *AnySchema) Valid(values ...interface{}) *AnySchema {
 			}
 		}
 		if !isValid {
-			ctx.Abort(fmt.Errorf("field `%s` value %v is not in %v", ctx.FieldPath(), ctx.Value, values))
+			ctx.Abort(ErrorOneOf(ctx, values))
 			return
 		}
 	})
