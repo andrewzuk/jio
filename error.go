@@ -137,7 +137,7 @@ func ErrorMin(ctx *Context, min interface{}) FieldError {
 }
 
 func ErrorMessageMin(min interface{}) string {
-    return fmt.Sprintf(`must be greater than or equal to %v`, min)
+    return fmt.Sprintf(`must be >= %v`, min)
 }
 
 func ErrorMax(ctx *Context, min interface{}) FieldError {
@@ -145,7 +145,7 @@ func ErrorMax(ctx *Context, min interface{}) FieldError {
 }
 
 func ErrorMessageMax(max interface{}) string {
-    return fmt.Sprintf(`must be less than or equal to %v`, max)
+    return fmt.Sprintf(`must be <= %v`, max)
 }
 
 func ErrorEqual(ctx *Context, val interface{}) FieldError {
@@ -173,7 +173,7 @@ func ErrorMessageType(t string) string {
 }
 
 func ErrorTypeObject(ctx *Context) FieldError {
-    return ErrorType(ctx, ErrorMessageTypeObject())
+    return NewError(ctx, ErrorMessageTypeObject())
 }
 
 func ErrorMessageTypeObject() string {
@@ -181,7 +181,7 @@ func ErrorMessageTypeObject() string {
 }
 
 func ErrorTypeArray(ctx *Context) FieldError {
-    return ErrorType(ctx, ErrorMessageTypeArray())
+    return NewError(ctx, ErrorMessageTypeArray())
 }
 
 func ErrorMessageTypeArray() string {
@@ -189,7 +189,7 @@ func ErrorMessageTypeArray() string {
 }
 
 func ErrorTypeString(ctx *Context) FieldError {
-    return ErrorType(ctx, ErrorMessageTypeString())
+    return NewError(ctx, ErrorMessageTypeString())
 }
 
 func ErrorMessageTypeString() string {
@@ -197,7 +197,7 @@ func ErrorMessageTypeString() string {
 }
 
 func ErrorTypeBool(ctx *Context) FieldError {
-    return ErrorType(ctx, ErrorMessageTypeBool())
+    return NewError(ctx, ErrorMessageTypeBool())
 }
 
 func ErrorMessageTypeBool() string {
@@ -205,7 +205,7 @@ func ErrorMessageTypeBool() string {
 }
 
 func ErrorTypeInt(ctx *Context) FieldError {
-    return ErrorType(ctx, ErrorMessageTypeInt())
+    return NewError(ctx, ErrorMessageTypeInt())
 }
 
 func ErrorMessageTypeInt() string {
@@ -213,7 +213,7 @@ func ErrorMessageTypeInt() string {
 }
 
 func ErrorTypeNumber(ctx *Context) FieldError {
-    return ErrorType(ctx, ErrorMessageTypeNumber())
+    return NewError(ctx, ErrorMessageTypeNumber())
 }
 
 func ErrorMessageTypeNumber() string {
@@ -241,7 +241,7 @@ func ErrorMessageNotOneOf(values []interface{}) string {
     for _, v := range values {
         vals = append(vals, fmt.Sprintf(`%s`, v))
     }
-    return fmt.Sprintf(`cannot be be one of [%s]`, strings.Join(vals, ", "))
+    return fmt.Sprintf(`cannot be any of [%s]`, strings.Join(vals, ", "))
 }
 
 func ErrorMessageNumberOneOf(values []float64) string {

@@ -34,7 +34,7 @@ func (b *baseSchema) whenEqual(ctx *Context, refPath string, value interface{}, 
 	//	return
 	//}
 	if value == value {
-	    ctx.ErrorBag.SetTemplate("%s " + fmt.Sprintf(`when %s = %v`, ctx.fields[len(ctx.fields) - 1], value))
+	    ctx.ErrorBag.SetTemplate("%s " + fmt.Sprintf(`when %s = %v`, refPath, value))
 		then.Validate(ctx)
 	    ctx.ErrorBag.SetTemplate("")
 	}

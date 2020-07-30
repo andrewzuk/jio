@@ -113,6 +113,9 @@ func (a *ArraySchema) Items(schemas ...Schema) *ArraySchema {
 			rv := ctxRV.Index(i).Interface()
 			for _, schema := range schemas {
 				ctxNew := NewContext(rv)
+				ctxNew.root = ctx.root
+				ctxNew.parentRoot = ctx.parentRoot
+				ctxNew.parent = ctx.parent
 				ctxNew.fields = append(ctxNew.fields, append(ctx.fields, fmt.Sprintf(`%d`, i))...)
 				schema.Validate(ctxNew)
 				errs.AddBag(ctxNew.ErrorBag)
@@ -154,6 +157,12 @@ func (a *ArraySchema) Length(length int) *ArraySchema {
 
 // Validate same as AnySchema.Validate
 func (a *ArraySchema) Validate(ctx *Context) {
+    if ctx.Value != nil {
+        if !ctx.AssertKind(reflect.Slice) {
+            ctx.Abort(ErrorTypeArray(ctx))
+            return
+        }
+    }
 	if a.required == nil {
 		a.Optional()
 	}
@@ -161,11 +170,6 @@ func (a *ArraySchema) Validate(ctx *Context) {
 		rule(ctx)
 		if ctx.skip {
 			return
-		}
-	}
-	if ctx.ErrorBag.Empty() {
-		if !ctx.AssertKind(reflect.Slice) {
-			ctx.Abort(ErrorTypeArray(ctx))
 		}
 	}
 }

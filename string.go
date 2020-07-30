@@ -214,6 +214,12 @@ func (s *StringSchema) Trim() *StringSchema {
 
 // Validate same as AnySchema.Validate
 func (s *StringSchema) Validate(ctx *Context) {
+    if ctx.Value != nil {
+        if _, ok := (ctx.Value).(string); !ok {
+            ctx.Abort(ErrorTypeString(ctx))
+            return
+        }
+    }
 	if s.required == nil {
 		s.Optional()
 	}
@@ -221,11 +227,6 @@ func (s *StringSchema) Validate(ctx *Context) {
 		rule(ctx)
 		if ctx.skip {
 			return
-		}
-	}
-	if ctx.ErrorBag == nil {
-		if _, ok := (ctx.Value).(string); !ok {
-			ctx.Abort(ErrorTypeString(ctx))
 		}
 	}
 }

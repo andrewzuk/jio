@@ -230,21 +230,22 @@ func (n *NumberSchema) ParseString() *NumberSchema {
 
 // Validate same as AnySchema.Validate
 func (n *NumberSchema) Validate(ctx *Context) {
+    if ctx.Value != nil {
+        if ctxValue, ok := ctx.Value.(int); ok {
+            ctx.Value = float64(ctxValue)
+        }
+        if _, ok := (ctx.Value).(float64); !ok {
+            ctx.Abort(ErrorTypeNumber(ctx))
+            return
+        }
+    }
 	if n.required == nil {
 		n.Optional()
-	}
-	if ctxValue, ok := ctx.Value.(int); ok {
-		ctx.Value = float64(ctxValue)
 	}
 	for _, rule := range n.rules {
 		rule(ctx)
 		if ctx.skip {
 			return
-		}
-	}
-	if ctx.ErrorBag.Empty() {
-		if _, ok := (ctx.Value).(float64); !ok {
-			ctx.Abort(ErrorTypeNumber(ctx))
 		}
 	}
 }

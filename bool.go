@@ -117,6 +117,13 @@ func (b *BoolSchema) Falsy(values ...interface{}) *BoolSchema {
 
 // Validate same as AnySchema.Validate
 func (b *BoolSchema) Validate(ctx *Context) {
+    if ctx.Value != nil {
+        if _, ok := (ctx.Value).(bool); !ok {
+            ctx.Abort(ErrorTypeBool(ctx))
+            return
+        }
+    }
+
 	if b.required == nil {
 		b.Optional()
 	}

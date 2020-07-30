@@ -17,31 +17,47 @@ func NewContext(data interface{}) *Context {
 
 // Context contains data and toolkit
 type Context struct {
-    Value     interface{}
-    ErrorBag  *ErrorBag
-    root      interface{}
-    fields    []string
-    storage   map[string]interface{}
-    skip      bool
-    kindCache map[*interface{}]reflect.Kind
+    Value      interface{}
+    ErrorBag   *ErrorBag
+    root       interface{}
+    parentRoot interface{}
+    parent     interface{}
+    fields     []string
+    storage    map[string]interface{}
+    skip       bool
+    kindCache  map[*interface{}]reflect.Kind
 }
 
 // Ref return the reference value.
 // The reference path support use `.` access object property, just like javascript.
 func (ctx *Context) Ref(refPath string) (value interface{}, ok bool) {
     fields := strings.Split(refPath, ".")
-    value = ctx.root
-    var valueMap map[string]interface{}
-    for _, field := range fields {
-        valueMap, ok = value.(map[string]interface{})
-        if !ok {
-            return
-        }
-        value, ok = valueMap[field]
-        if !ok {
-            return
+    value, ok = ref(ctx.parent, fields)
+    if !ok {
+        value, ok = ref(ctx.parentRoot, fields)
+    }
+    if !ok {
+        value, ok = ref(ctx.root, fields)
+    }
+    return
+}
+
+func ref(root interface{}, fields []string) (value interface{}, ok bool) {
+    rootMap, ok := root.(map[string]interface{})
+    if !ok {
+        return
+    }
+
+    if len(fields) > 1 {
+        for _, field := range fields[0:len(fields) - 1] {
+            rootMap, ok = rootMap[field].(map[string]interface{})
+            if !ok {
+                return
+            }
         }
     }
+
+    value, ok = rootMap[fields[len(fields) - 1]]
     return
 }
 

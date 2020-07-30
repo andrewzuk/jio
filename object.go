@@ -161,9 +161,13 @@ func (o *ObjectSchema) Keys(children K) *ObjectSchema {
 
 		for _, obj := range children.sort() {
 			value, _ := ctxValue[obj.key]
+			ctx.parent = ctxValue
 			ctx.skip = false
 			ctx.fields = append(fields, obj.key)
 			ctx.Value = value
+			if _, ok := obj.schema.(*ObjectSchema); ok && ctx.parentRoot == nil {
+			    ctx.parentRoot = ctx.parent
+            }
 			obj.schema.Validate(ctx)
 			if ctx.ErrorBag.Empty() && !ctx.skip {
 				ctxValue[obj.key] = ctx.Value
@@ -174,6 +178,12 @@ func (o *ObjectSchema) Keys(children K) *ObjectSchema {
 
 // Validate same as AnySchema.Validate
 func (o *ObjectSchema) Validate(ctx *Context) {
+    if ctx.Value != nil {
+        if _, ok := (ctx.Value).(map[string]interface{}); !ok {
+            ctx.Abort(ErrorTypeObject(ctx))
+            return
+        }
+    }
 	if o.required == nil {
 		o.Optional()
 	}
@@ -181,11 +191,6 @@ func (o *ObjectSchema) Validate(ctx *Context) {
 		rule(ctx)
 		if ctx.skip {
 			return
-		}
-	}
-	if ctx.ErrorBag == nil {
-		if _, ok := (ctx.Value).(map[string]interface{}); !ok {
-			ctx.Abort(ErrorTypeObject(ctx))
 		}
 	}
 }
