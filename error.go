@@ -133,7 +133,7 @@ func ErrorMessageArrayLengthEqual(val int) string {
 }
 
 func ErrorMessageArrayUniqueObjects(fields []string) string {
-    return fmt.Sprintf("must be unique [fields: %s]", strings.Join(fields, ", "))
+    return fmt.Sprintf("must be unique [uniqueness fields: %s]", strings.Join(fields, ", "))
 }
 
 func ErrorArrayUniqueObjects(ctx *Context, fields []string) FieldError {

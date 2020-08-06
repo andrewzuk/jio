@@ -169,7 +169,11 @@ func (a *ArraySchema) UniqueObjects(fields ...string) *ArraySchema {
 
             var key string
             for _, field := range fields {
-                key += obj[field].(string)
+                k, ok := obj[field].(string)
+                if !ok {
+                    return nil
+                }
+                key += k
             }
 
             if _, ok := valsMap[key]; ok {
