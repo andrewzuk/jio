@@ -132,6 +132,14 @@ func ErrorMessageArrayLengthEqual(val int) string {
     return fmt.Sprintf(`must have exactly %s`, items(val))
 }
 
+func ErrorMessageArrayUniqueObjects(fields []string) string {
+    return fmt.Sprintf("must be unique [fields: %s]", strings.Join(fields, ", "))
+}
+
+func ErrorArrayUniqueObjects(ctx *Context, fields []string) FieldError {
+    return NewError(ctx, ErrorMessageArrayUniqueObjects(fields))
+}
+
 func ErrorMin(ctx *Context, min interface{}) FieldError {
     return NewError(ctx, ErrorMessageMin(min))
 }

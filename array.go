@@ -155,6 +155,35 @@ func (a *ArraySchema) Length(length int) *ArraySchema {
 	})
 }
 
+// UniqueObjects checks that all slice objects are unique, using a concatenation of all field values as the composite key for each object.
+func (a *ArraySchema) UniqueObjects(fields ...string) *ArraySchema {
+    return a.Check(func(ctx *Context) error {
+        ref := reflect.ValueOf(ctx.Value)
+        valsMap := map[interface{}]bool{}
+        for i := 0; i < ref.Len(); i++ {
+            obj, ok := ref.Index(i).Interface().(map[string]interface{})
+            if !ok {
+                // only works for a list of objects at present
+                return nil
+            }
+
+            var key string
+            for _, field := range fields {
+                key += obj[field].(string)
+            }
+
+            if _, ok := valsMap[key]; ok {
+                // not unique
+                return errors.New(ErrorMessageArrayUniqueObjects(fields))
+            }
+
+            valsMap[key] = true
+        }
+
+        return nil
+    })
+}
+
 // Validate same as AnySchema.Validate
 func (a *ArraySchema) Validate(ctx *Context) {
     if ctx.Value != nil {
