@@ -36,6 +36,7 @@ var _ Schema = new(ObjectSchema)
 type ObjectSchema struct {
 	baseSchema
 
+	children *K
 	required *bool
 	rules    []func(*Context)
 }
@@ -138,6 +139,32 @@ func (o *ObjectSchema) Without(keys ...string) *ObjectSchema {
 	})
 }
 
+// Strict forbids keys that are not in this schema
+func (o *ObjectSchema) Strict() *ObjectSchema {
+    return o.Transform(func(ctx *Context) {
+        if o.children == nil {
+            return
+        }
+
+        ctxValue, ok := ctx.Value.(map[string]interface{})
+        if !ok {
+            ctx.ErrorBag.Add(ErrorTypeObject(ctx))
+        }
+
+        var unknownKeys []string
+        for k, _ := range ctxValue {
+            if _, ok := (*o.children)[k]; !ok {
+                unknownKeys = append(unknownKeys, k)
+            }
+        }
+
+        if len(unknownKeys) > 0 {
+            ctx.ErrorBag.Add(ErrorObjectContainsUnknownKeys(ctx, unknownKeys))
+            return
+        }
+    })
+}
+
 // When same as AnySchema.When
 func (o *ObjectSchema) When(refPath string, condition interface{}, then Schema) *ObjectSchema {
 	return o.Transform(func(ctx *Context) { o.whenEqual(ctx, refPath, condition, then) })
@@ -145,6 +172,14 @@ func (o *ObjectSchema) When(refPath string, condition interface{}, then Schema) 
 
 // Keys set the object keys's schema
 func (o *ObjectSchema) Keys(children K) *ObjectSchema {
+    if o.children != nil {
+        for k, s := range children {
+            (*o.children)[k] = s
+        }
+    } else {
+        o.children = &children
+    }
+
 	return o.Transform(func(ctx *Context) {
 		ctxValue, ok := ctx.Value.(map[string]interface{})
 		if !ok {

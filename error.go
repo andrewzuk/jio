@@ -296,6 +296,14 @@ func ErrorMessageObjectContainsForbiddenKeys(missingKeys []string) string {
     return fmt.Sprintf(`contains forbidden keys [%s]`, strings.Join(missingKeys, ", "))
 }
 
+func ErrorObjectContainsUnknownKeys(ctx *Context, unknownKeys []string) FieldError {
+    return NewError(ctx,  ErrorMessageObjectContainsUnknownKeys(unknownKeys))
+}
+
+func ErrorMessageObjectContainsUnknownKeys(unknownKeys []string) string {
+    return fmt.Sprintf(`contains unknown keys [%s]`, strings.Join(unknownKeys, ", "))
+}
+
 func characters(count int) string {
     str := "character"
     if count != 1 {
